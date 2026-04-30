@@ -1,0 +1,23 @@
+name: small
+d_model: 192
+n_layers: 4
+n_heads: 6
+d_ff: 768
+block_size: 1024
+dropout: 0.1
+batch_size: 8
+gradient_accumulation_steps: 1
+learning_rate: 0.0003
+min_lr: 0.00003
+weight_decay: 0.1
+beta1: 0.9
+beta2: 0.95
+warmup_steps: 100
+max_steps:
+eval_interval: 200
+eval_iters: 50
+log_interval: 20
+seed: 1337
+compile: false
+notes:
+  role: second scaling point
