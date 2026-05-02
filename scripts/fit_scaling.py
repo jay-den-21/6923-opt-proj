@@ -7,6 +7,9 @@ import argparse
 import json
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -64,11 +67,46 @@ def read_summary(path: Path) -> dict:
         return json.load(f)
 
 
+def prediction_interval(
+    params: np.ndarray,
+    losses: np.ndarray,
+    fit: dict,
+    predicted_n: float,
+    samples: int,
+    seed: int = 1337,
+) -> dict:
+    if samples <= 0 or len(params) < 4:
+        return {}
+    rng = np.random.default_rng(seed)
+    observed_pred = power_law(params, fit["a"], fit["alpha"], fit["c"])
+    residuals = losses - observed_pred
+    preds = []
+    for _ in range(samples):
+        boot_losses = observed_pred + rng.choice(residuals, size=len(residuals), replace=True)
+        try:
+            boot_fit = fit_power_law(params, boot_losses)
+            preds.append(float(power_law(np.asarray([predicted_n]), boot_fit["a"], boot_fit["alpha"], boot_fit["c"])[0]))
+        except Exception:
+            continue
+    if not preds:
+        return {}
+    arr = np.asarray(preds)
+    return {
+        "method": "residual_bootstrap",
+        "samples_requested": samples,
+        "samples_used": int(len(arr)),
+        "prediction_p05": float(np.percentile(arr, 5)),
+        "prediction_p50": float(np.percentile(arr, 50)),
+        "prediction_p95": float(np.percentile(arr, 95)),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", nargs="+", required=True, help="Run dirs or summary.json files.")
     parser.add_argument("--out_dir", default="outputs/analysis")
     parser.add_argument("--predict_multiplier", type=float, default=10.0)
+    parser.add_argument("--bootstrap_samples", type=int, default=1000)
     args = parser.parse_args()
 
     rows = []
@@ -93,7 +131,12 @@ def main() -> None:
     largest = float(params.max())
     predicted_n = largest * args.predict_multiplier
     predicted_loss = float(power_law(np.asarray([predicted_n]), fit["a"], fit["alpha"], fit["c"])[0])
-    fit["prediction"] = {"parameters": predicted_n, "loss": predicted_loss, "multiplier": args.predict_multiplier}
+    fit["prediction"] = {
+        "parameters": predicted_n,
+        "loss": predicted_loss,
+        "multiplier": args.predict_multiplier,
+        "interval": prediction_interval(params, losses, fit, predicted_n, args.bootstrap_samples),
+    }
     fit["runs"] = rows
 
     out_dir = Path(args.out_dir)

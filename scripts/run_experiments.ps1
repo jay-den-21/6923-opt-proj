@@ -7,14 +7,22 @@ param(
     "lr-sweep",
     "scaling",
     "analysis",
+    "dataset-stats",
+    "mup-lr-sweep",
+    "mup-scaling",
+    "analysis-mup",
+    "compare-scaling",
     "sample-eval",
+    "sample-sheet",
     "all-smoke"
   )]
   [string]$Stage = "all-smoke",
 
   [string]$BestLr = "",
-  [int]$MaxSteps = 1000,
-  [string]$Device = "auto"
+  [int]$MaxSteps = 0,
+  [string]$Device = "auto",
+  [string[]]$Datasets = @("starvector/svg-icons-simple", "starvector/svg-emoji-simple", "starvector/svg-fonts-simple"),
+  [int]$MaxRecords = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +31,7 @@ $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-$LrValues = @("1e-4", "3e-4", "1e-3", "3e-3", "1e-2")
+$LrValues = @("1e-5", "3e-5", "1e-4", "3e-4", "1e-3", "3e-3", "1e-2")
 $ScaleConfigs = @(
   @{ Name = "tiny"; Config = "configs/tiny.yaml" },
   @{ Name = "small"; Config = "configs/small.yaml" },
@@ -51,6 +59,9 @@ function Run-Python {
   param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
   Ensure-Venv
   & $Python @Args
+  if ($LASTEXITCODE -ne 0) {
+    throw "Python command failed with exit code $LASTEXITCODE`: $Python $($Args -join ' ')"
+  }
 }
 
 function Install-Dependencies {
@@ -72,10 +83,20 @@ function Preprocess-Smoke {
 
 function Preprocess-Full {
   Invoke-Step "Preprocess full dataset" {
-    Run-Python scripts/preprocess.py
+    $cmdArgs = @("scripts/preprocess.py", "--datasets") + $Datasets
+    if ($MaxRecords -gt 0) {
+      $cmdArgs = $cmdArgs + @("--max_records", [string]$MaxRecords)
+    }
+    Run-Python @cmdArgs
   }
   Invoke-Step "Train tokenizer and encode full splits" {
     Run-Python scripts/train_tokenizer.py --vocab_size 2048 --max_tokens 1024
+  }
+}
+
+function Plot-DatasetStats {
+  Invoke-Step "Plot dataset stats and examples" {
+    Run-Python scripts/plot_dataset_stats.py --data_dir data/processed --out_dir outputs/analysis
   }
 }
 
@@ -92,19 +113,23 @@ function Train-TinySmoke {
 function Train-LrSweep {
   foreach ($lr in $LrValues) {
     Invoke-Step "Tiny LR sweep lr=$lr" {
-      Run-Python scripts/train.py `
-        --config configs/tiny.yaml `
-        --learning_rate $lr `
-        --out_dir "outputs/runs/tiny_lr_$lr" `
-        --max_steps $MaxSteps `
-        --device $Device
+      $cmdArgs = @(
+        "scripts/train.py",
+        "--config", "configs/tiny.yaml",
+        "--learning_rate", $lr,
+        "--out_dir", "outputs/runs/tiny_lr_$lr",
+        "--device", $Device
+      )
+      if ($MaxSteps -gt 0) {
+        $cmdArgs += @("--max_steps", [string]$MaxSteps)
+      }
+      Run-Python @cmdArgs
     }
   }
   Invoke-Step "Plot LR sweep" {
-    Run-Python scripts/plot_runs.py `
-      --mode lr_sweep `
-      --runs outputs/runs/tiny_lr_1e-4 outputs/runs/tiny_lr_3e-4 outputs/runs/tiny_lr_1e-3 outputs/runs/tiny_lr_3e-3 outputs/runs/tiny_lr_1e-2 `
-      --out_dir outputs/analysis
+    $runs = $LrValues | ForEach-Object { "outputs/runs/tiny_lr_$_" }
+    $cmdArgs = @("scripts/plot_runs.py", "--mode", "lr_sweep", "--runs") + $runs + @("--out_dir", "outputs/analysis")
+    Run-Python @cmdArgs
   }
 }
 
@@ -123,18 +148,116 @@ function Get-BestLr {
   return [string]$best.config.learning_rate
 }
 
+function Train-MupLrSweep {
+  foreach ($lr in $LrValues) {
+    Invoke-Step "muP tiny LR sweep lr=$lr" {
+      $cmdArgs = @(
+        "scripts/train.py",
+        "--config", "configs/tiny.yaml",
+        "--parameterization", "mup",
+        "--learning_rate", $lr,
+        "--out_dir", "outputs/runs/mup_tiny_lr_$lr",
+        "--device", $Device
+      )
+      if ($MaxSteps -gt 0) {
+        $cmdArgs += @("--max_steps", [string]$MaxSteps)
+      }
+      Run-Python @cmdArgs
+    }
+  }
+  Invoke-Step "Plot muP LR sweep" {
+    $runs = $LrValues | ForEach-Object { "outputs/runs/mup_tiny_lr_$_" }
+    $cmdArgs = @("scripts/plot_runs.py", "--mode", "lr_sweep", "--runs") + $runs + @("--out_dir", "outputs/analysis_mup")
+    Run-Python @cmdArgs
+  }
+}
+
+function Get-MupBestLr {
+  if ($BestLr) {
+    return $BestLr
+  }
+  $summaries = Get-ChildItem outputs/runs/mup_tiny_lr_*/summary.json -ErrorAction SilentlyContinue
+  if (-not $summaries) {
+    throw "No muP LR sweep summaries found. Run -Stage mup-lr-sweep first or pass -BestLr 3e-4."
+  }
+  $best = $summaries |
+    ForEach-Object { Get-Content $_.FullName | ConvertFrom-Json } |
+    Sort-Object best_val_loss |
+    Select-Object -First 1
+  return [string]$best.config.learning_rate
+}
+
+function Train-MupScaling {
+  $lr = Get-MupBestLr
+  Write-Host "Using muP BestLr=$lr" -ForegroundColor Green
+  foreach ($item in $ScaleConfigs) {
+    Invoke-Step "muP scaling run $($item.Name)" {
+      $cmdArgs = @(
+        "scripts/train.py",
+        "--config", $item.Config,
+        "--parameterization", "mup",
+        "--learning_rate", $lr,
+        "--out_dir", "outputs/runs/mup_$($item.Name)",
+        "--device", $Device
+      )
+      if ($MaxSteps -gt 0) {
+        $cmdArgs += @("--max_steps", [string]$MaxSteps)
+      }
+      Run-Python @cmdArgs
+    }
+  }
+}
+
 function Train-Scaling {
   $lr = Get-BestLr
   Write-Host "Using BestLr=$lr" -ForegroundColor Green
   foreach ($item in $ScaleConfigs) {
     Invoke-Step "Scaling run $($item.Name)" {
-      Run-Python scripts/train.py `
-        --config $item.Config `
-        --learning_rate $lr `
-        --out_dir "outputs/runs/$($item.Name)" `
-        --max_steps $MaxSteps `
-        --device $Device
+      $cmdArgs = @(
+        "scripts/train.py",
+        "--config", $item.Config,
+        "--learning_rate", $lr,
+        "--out_dir", "outputs/runs/$($item.Name)",
+        "--device", $Device
+      )
+      if ($MaxSteps -gt 0) {
+        $cmdArgs += @("--max_steps", [string]$MaxSteps)
+      }
+      Run-Python @cmdArgs
     }
+  }
+}
+
+function Run-AnalysisMup {
+  $runs = @(
+    "outputs/runs/mup_tiny",
+    "outputs/runs/mup_small",
+    "outputs/runs/mup_medium",
+    "outputs/runs/mup_large_lite",
+    "outputs/runs/mup_xl_lite"
+  )
+  Invoke-Step "Fit muP scaling curve" {
+    $cmdArgs = @("scripts/fit_scaling.py", "--runs") + $runs + @("--out_dir", "outputs/analysis_mup")
+    Run-Python @cmdArgs
+  }
+  Invoke-Step "Plot muP validation curves" {
+    $cmdArgs = @("scripts/plot_runs.py", "--mode", "curves", "--runs") + $runs + @("--out_dir", "outputs/analysis_mup")
+    Run-Python @cmdArgs
+  }
+}
+
+function Compare-Scaling {
+  if (-not (Test-Path "outputs/analysis/scaling_fit.json")) {
+    throw "Missing outputs/analysis/scaling_fit.json. Run -Stage analysis first."
+  }
+  if (-not (Test-Path "outputs/analysis_mup/scaling_fit.json")) {
+    throw "Missing outputs/analysis_mup/scaling_fit.json. Run -Stage analysis-mup first."
+  }
+  Invoke-Step "Compare SP vs muP scaling" {
+    Run-Python scripts/compare_scaling.py `
+      --sp_fit outputs/analysis/scaling_fit.json `
+      --mup_fit outputs/analysis_mup/scaling_fit.json `
+      --out outputs/analysis/sp_vs_mup_scaling.png
   }
 }
 
@@ -147,12 +270,20 @@ function Run-Analysis {
     "outputs/runs/xl_lite"
   )
   Invoke-Step "Fit scaling curve" {
-    $args = @("scripts/fit_scaling.py", "--runs") + $runs + @("--out_dir", "outputs/analysis")
-    Run-Python @args
+    $cmdArgs = @("scripts/fit_scaling.py", "--runs") + $runs + @("--out_dir", "outputs/analysis")
+    Run-Python @cmdArgs
   }
   Invoke-Step "Plot validation curves" {
-    $args = @("scripts/plot_runs.py", "--mode", "curves", "--runs") + $runs + @("--out_dir", "outputs/analysis")
-    Run-Python @args
+    $cmdArgs = @("scripts/plot_runs.py", "--mode", "curves", "--runs") + $runs + @("--out_dir", "outputs/analysis")
+    Run-Python @cmdArgs
+  }
+}
+
+function Make-SampleSheet {
+  Invoke-Step "Build generated sample sheet" {
+    Run-Python scripts/make_sample_sheet.py `
+      --samples outputs/runs/xl_lite/samples/samples_evaluated.jsonl `
+      --out outputs/runs/xl_lite/sample_contact_sheet.html
   }
 }
 
@@ -173,11 +304,17 @@ switch ($Stage) {
   "setup" { Install-Dependencies }
   "preprocess-smoke" { Preprocess-Smoke }
   "preprocess-full" { Preprocess-Full }
+  "dataset-stats" { Plot-DatasetStats }
   "tiny-smoke" { Train-TinySmoke }
   "lr-sweep" { Train-LrSweep }
   "scaling" { Train-Scaling }
   "analysis" { Run-Analysis }
+  "mup-lr-sweep" { Train-MupLrSweep }
+  "mup-scaling" { Train-MupScaling }
+  "analysis-mup" { Run-AnalysisMup }
+  "compare-scaling" { Compare-Scaling }
   "sample-eval" { Run-SampleEval }
+  "sample-sheet" { Make-SampleSheet }
   "all-smoke" {
     Install-Dependencies
     Preprocess-Smoke

@@ -44,6 +44,20 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 .\scripts\run_experiments.ps1 -Stage preprocess-full
 ```
 
+现在 `preprocess-full` 默认会合并：
+
+- `starvector/svg-icons-simple`
+- `starvector/svg-emoji-simple`
+- `starvector/svg-fonts-simple`
+
+目标是让 `data/processed/tokenizer_stats.json` 里的 train tokens 达到至少 100M。数据会比较大、下载时间会明显增加。如果只是先试流程，可以加 `-MaxRecords 20000`。
+
+生成数据统计图和 SVG 难度示例：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage dataset-stats
+```
+
 扫 tiny 模型学习率：
 
 ```powershell
@@ -73,10 +87,42 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 .\scripts\run_experiments.ps1 -Stage analysis
 ```
 
+## 4. µP 实验
+
+满分版本需要做 standard parameterization 和 µP 对比。先跑 µP 的 tiny 学习率 sweep：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage mup-lr-sweep -MaxSteps 1000 -Device cuda
+```
+
+然后用 µP tiny 选出来的学习率训练五个规模：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage mup-scaling -MaxSteps 1000 -Device cuda
+```
+
+拟合 µP scaling curve：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage analysis-mup
+```
+
+画 standard vs. µP 对比图：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage compare-scaling
+```
+
 采样和评估最大模型：
 
 ```powershell
 .\scripts\run_experiments.ps1 -Stage sample-eval
+```
+
+生成带 prefix / SVG code / render 结果的 HTML 表：
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage sample-sheet
 ```
 
 ## 参数组
@@ -94,7 +140,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 学习率 sweep 默认跑：
 
 ```text
-1e-4, 3e-4, 1e-3, 3e-3, 1e-2
+1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2
 ```
 
 ## 结果位置
@@ -107,7 +153,11 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 - scaling fit：`outputs/analysis/scaling_fit.json`
 - scaling 图：`outputs/analysis/scaling_plot.png`
 - validation curves：`outputs/analysis/validation_curves.png`
+- sequence length histogram：`outputs/analysis/sequence_length_histogram.png`
+- dataset examples：`outputs/analysis/dataset_examples.html`
+- µP scaling fit：`outputs/analysis_mup/scaling_fit.json`
+- standard vs. µP 图：`outputs/analysis/sp_vs_mup_scaling.png`
 
 ## 备注
 
-`-MaxSteps 1000` 是较保守的固定训练预算，适合先跑通全部模型。如果机器比较慢，可以改成 `-MaxSteps 200` 做更快的测试；如果有 GPU 和时间，可以去掉 `-MaxSteps`，让脚本按数据量跑更完整的一轮。
+`-MaxSteps 1000` 是较保守的固定训练预算，适合先跑通全部模型。满分要求更接近“至少 100M train tokens + 每个模型完整 1 epoch + standard vs. µP 对比”。如果有 GPU 和时间，可以去掉 `-MaxSteps`，让脚本按数据量跑完整一轮。

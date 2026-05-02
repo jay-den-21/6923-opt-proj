@@ -53,6 +53,7 @@ def encode_split(tokenizer: SvgTokenizer, src: Path, dst: Path, max_tokens: int)
     mmap = np.memmap(dst, dtype=np.uint32, mode="w+", shape=(len(all_ids),))
     mmap[:] = all_ids[:]
     mmap.flush()
+    hist_counts, hist_edges = np.histogram(lengths, bins=[0, 128, 256, 384, 512, 640, 768, 896, 1024, max_tokens + 1])
     return {
         "source": str(src),
         "encoded": str(dst),
@@ -65,6 +66,10 @@ def encode_split(tokenizer: SvgTokenizer, src: Path, dst: Path, max_tokens: int)
         "length_mean": float(np.mean(lengths)) if lengths else 0.0,
         "length_p50": float(np.percentile(lengths, 50)) if lengths else 0.0,
         "length_p95": float(np.percentile(lengths, 95)) if lengths else 0.0,
+        "length_histogram": {
+            "bin_edges": [int(x) for x in hist_edges.tolist()],
+            "counts": [int(x) for x in hist_counts.tolist()],
+        },
     }
 
 

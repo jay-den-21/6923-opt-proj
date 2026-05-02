@@ -40,8 +40,9 @@ python scripts/train_tokenizer.py --vocab_size 2048 --max_tokens 1024
 For the real run:
 
 ```bash
-python scripts/preprocess.py
+python scripts/preprocess.py --datasets starvector/svg-icons-simple starvector/svg-emoji-simple starvector/svg-fonts-simple
 python scripts/train_tokenizer.py --vocab_size 2048 --max_tokens 1024
+python scripts/plot_dataset_stats.py --data_dir data/processed --out_dir outputs/analysis
 ```
 
 Outputs:
@@ -49,6 +50,10 @@ Outputs:
 - `data/processed/preprocess_stats.json`
 - `data/processed/tokenizer_stats.json`
 - `data/processed/{train,val,test}.bin`
+- `outputs/analysis/sequence_length_histogram.png`
+- `outputs/analysis/dataset_examples.html`
+
+For a full-credit attempt, verify that `data/processed/tokenizer_stats.json` reports at least 100M training tokens after filtering. If it is below 100M, add another supplementary dataset or raise the supplementary-data subsample.
 
 ## 2. Tiny LR Sweep
 
@@ -63,7 +68,7 @@ Then run the learning-rate sweep:
 macOS/Linux:
 
 ```bash
-for lr in 1e-4 3e-4 1e-3 3e-3 1e-2; do
+for lr in 1e-5 3e-5 1e-4 3e-4 1e-3 3e-3 1e-2; do
   python scripts/train.py --config configs/tiny.yaml --learning_rate $lr --out_dir outputs/runs/tiny_lr_$lr
 done
 ```
@@ -71,7 +76,7 @@ done
 Windows PowerShell:
 
 ```powershell
-foreach ($lr in "1e-4","3e-4","1e-3","3e-3","1e-2") {
+foreach ($lr in "1e-5","3e-5","1e-4","3e-4","1e-3","3e-3","1e-2") {
   python scripts/train.py --config configs/tiny.yaml --learning_rate $lr --out_dir outputs/runs/tiny_lr_$lr
 }
 ```
@@ -130,6 +135,25 @@ Outputs:
 - `outputs/analysis/scaling_plot.png`
 - `outputs/analysis/validation_curves.png`
 
+## 4b. muP Scaling Study
+
+Install dependencies, including `mup`, then repeat the LR sweep and scaling runs with muP:
+
+```bash
+python scripts/train.py --config configs/tiny.yaml --parameterization mup --learning_rate 1e-4 --out_dir outputs/runs/mup_tiny_lr_1e-4
+```
+
+Windows PowerShell has staged helpers:
+
+```powershell
+.\scripts\run_experiments.ps1 -Stage mup-lr-sweep -Device cuda
+.\scripts\run_experiments.ps1 -Stage mup-scaling -Device cuda
+.\scripts\run_experiments.ps1 -Stage analysis-mup
+.\scripts\run_experiments.ps1 -Stage compare-scaling
+```
+
+The muP path uses `mup.MuReadout`, `mup.MuAdamW`, base/delta shape annotation, and transformer attention scaling by `1 / d_head`.
+
 ## 5. Generate and Evaluate Samples
 
 Use the best checkpoint:
@@ -143,6 +167,7 @@ python scripts/evaluate.py \
 ```
 
 The evaluator reports test perplexity, XML validity rate, and render validity rate.
+It also reports a structural validity rate for valid `<svg>` roots and basic attribute sanity checks. Use `scripts/make_sample_sheet.py` to create an HTML grid with prefixes, generated code, and rendered SVGs.
 
 ## Report
 
@@ -150,4 +175,4 @@ Use `report/report_template.md` as the report skeleton. Every number in the repo
 
 ## Notes on Scope
 
-The full assignment asks for at least 100M training tokens and a complete fixed-LR vs. muP comparison. This implementation is designed for a conservative, honest reduced-compute submission. If the reduced runs are the only completed experiments, describe them as reduced-compute experiments and do not claim that they satisfy the full ideal experimental scale.
+The full assignment asks for at least 100M training tokens, one-epoch comparisons, and a complete fixed-LR vs. muP comparison. If you run with `--max_steps`, describe the result as fixed-budget rather than one epoch. If the full muP or 100M-token runs are incomplete, report that limitation directly.
