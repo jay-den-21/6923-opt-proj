@@ -22,19 +22,23 @@ def power_law(n: np.ndarray, a: float, alpha: float, c: float) -> np.ndarray:
 
 def fit_power_law(params: np.ndarray, losses: np.ndarray) -> dict:
     if curve_fit is not None and len(params) >= 4:
-        p0 = [float((losses[0] - losses[-1]) * params[0] ** 0.1), 0.1, float(losses.min() * 0.95)]
-        bounds = ([0.0, 0.0, 0.0], [1000.0, 5.0, float(losses.min() * 0.999)])
-        popt, pcov = curve_fit(power_law, params, losses, p0=p0, bounds=bounds, maxfev=10000)
-        pred = power_law(params, *popt)
-        stderr = np.sqrt(np.diag(pcov)).tolist()
-        return {
-            "method": "scipy_curve_fit",
-            "a": float(popt[0]),
-            "alpha": float(popt[1]),
-            "c": float(popt[2]),
-            "stderr": stderr,
-            "rmse": float(np.sqrt(np.mean((pred - losses) ** 2))),
-        }
+        try:
+            a0 = max(float(abs(losses[0] - losses[-1]) * params[0] ** 0.1), 1e-6)
+            p0 = [a0, 0.1, float(losses.min() * 0.95)]
+            bounds = ([0.0, 0.0, 0.0], [1000.0, 5.0, float(losses.min() * 0.999)])
+            popt, pcov = curve_fit(power_law, params, losses, p0=p0, bounds=bounds, maxfev=10000)
+            pred = power_law(params, *popt)
+            stderr = np.sqrt(np.diag(pcov)).tolist()
+            return {
+                "method": "scipy_curve_fit",
+                "a": float(popt[0]),
+                "alpha": float(popt[1]),
+                "c": float(popt[2]),
+                "stderr": stderr,
+                "rmse": float(np.sqrt(np.mean((pred - losses) ** 2))),
+            }
+        except Exception as exc:
+            scipy_error = repr(exc)
 
     best = None
     for c in np.linspace(0.0, float(losses.min() * 0.95), 200):
@@ -50,6 +54,8 @@ def fit_power_law(params: np.ndarray, losses: np.ndarray) -> dict:
             best = {"method": "grid_log_linear", "a": float(a), "alpha": float(alpha), "c": float(c), "rmse": rmse}
     if best is None:
         raise RuntimeError("Could not fit scaling law")
+    if "scipy_error" in locals():
+        best["scipy_error"] = scipy_error
     return best
 
 

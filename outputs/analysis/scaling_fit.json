@@ -1,0 +1,59 @@
+{
+  "a": 0.37456192449398207,
+  "alpha": 6.7391097784412085e-15,
+  "c": 0.9631466001583933,
+  "method": "scipy_curve_fit",
+  "prediction": {
+    "loss": 1.3377085246523264,
+    "multiplier": 10.0,
+    "parameters": 258181120.0
+  },
+  "rmse": 0.2359854007850612,
+  "runs": [
+    {
+      "elapsed_seconds": 26.643693208694458,
+      "gpu_memory_mb": 1305.0078125,
+      "name": "tiny",
+      "parameters": 944896,
+      "tokens_per_second": 307464.8824332942,
+      "val_loss": 0.9642593824863434
+    },
+    {
+      "elapsed_seconds": 38.163288831710815,
+      "gpu_memory_mb": 1947.32861328125,
+      "name": "small",
+      "parameters": 2007168,
+      "tokens_per_second": 214656.55216782747,
+      "val_loss": 1.1603812372684479
+    },
+    {
+      "elapsed_seconds": 71.84617280960083,
+      "gpu_memory_mb": 1909.49462890625,
+      "name": "medium",
+      "parameters": 5040128,
+      "tokens_per_second": 114021.38318083521,
+      "val_loss": 1.4650614404678344
+    },
+    {
+      "elapsed_seconds": 73.370760679245,
+      "gpu_memory_mb": 1186.86181640625,
+      "name": "large_lite",
+      "parameters": 11099136,
+      "tokens_per_second": 111652.10669973795,
+      "val_loss": 1.5204909205436707
+    },
+    {
+      "elapsed_seconds": 120.29105138778687,
+      "gpu_memory_mb": 1158.78369140625,
+      "name": "xl_lite",
+      "parameters": 25818112,
+      "tokens_per_second": 68101.49138684585,
+      "val_loss": 1.578349645137787
+    }
+  ],
+  "stderr": [
+    1.0939669038741793,
+    0.37823591675469803,
+    1.0939669038741782
+  ]
+}

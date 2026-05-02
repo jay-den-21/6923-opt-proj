@@ -3,4 +3,5 @@ __pycache__/
 *.py[cod]
 data/
 outputs/
+report/
 .DS_Store

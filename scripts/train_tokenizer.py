@@ -34,7 +34,7 @@ def encode_split(tokenizer: SvgTokenizer, src: Path, dst: Path, max_tokens: int)
     kept = 0
     dropped = 0
     token_chunks: list[np.ndarray] = []
-    filtered_jsonl = dst.with_suffix(".jsonl")
+    filtered_jsonl = dst.with_name(f"{dst.stem}_filtered.jsonl")
     with open(filtered_jsonl, "w", encoding="utf-8") as out_json:
         for row in tqdm(list(read_jsonl(src)), desc=f"encoding {src.stem}"):
             ids = tokenizer.encode(row["svg"], add_special=True)

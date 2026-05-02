@@ -6,12 +6,30 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from lxml import etree
+
+
+def add_windows_cairo_path() -> None:
+    if os.name != "nt":
+        return
+    candidates = [
+        Path(r"C:\Program Files\GTK3-Runtime Win64\bin"),
+        Path(r"C:\Program Files (x86)\GTK3-Runtime Win64\bin"),
+    ]
+    for path in candidates:
+        if path.exists():
+            os.environ["PATH"] = f"{path}{os.pathsep}{os.environ.get('PATH', '')}"
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(path))
+
+
+add_windows_cairo_path()
 
 try:
     import cairosvg

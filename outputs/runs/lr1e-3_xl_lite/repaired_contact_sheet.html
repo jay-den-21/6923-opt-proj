@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Repaired SVG Generation Samples</title>
+  <style>
+    body {
+      margin: 32px;
+      font-family: Arial, sans-serif;
+      color: #1f2933;
+      background: #f6f8fa;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 24px;
+      max-width: 960px;
+      line-height: 1.45;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      max-width: 1200px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: contain;
+      border: 1px solid #d8dee4;
+      background: white;
+    }
+    .meta {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    code {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>Repaired SVG Generation Samples</h1>
+  <p>
+    Samples generated from the lr=1e-3 xl_lite checkpoint and repaired with an XML recovery parser before rendering.
+    This page uses the PNGs produced by CairoSVG after installing GTK3 Runtime for Windows.
+  </p>
+  <div class="grid">
+    <div class="card"><img src="samples_repaired/png/000_unconditional_t0.5.png" alt="sample 000"><div class="meta"><strong>000</strong><br>unconditional, t=0.5<br><code>samples_repaired/svg/000_unconditional_t0.5.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/001_unconditional_t0.8.png" alt="sample 001"><div class="meta"><strong>001</strong><br>unconditional, t=0.8<br><code>samples_repaired/svg/001_unconditional_t0.8.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/002_unconditional_t1.png" alt="sample 002"><div class="meta"><strong>002</strong><br>unconditional, t=1.0<br><code>samples_repaired/svg/002_unconditional_t1.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/003_unconditional_t0.5.png" alt="sample 003"><div class="meta"><strong>003</strong><br>unconditional, t=0.5<br><code>samples_repaired/svg/003_unconditional_t0.5.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/004_unconditional_t0.8.png" alt="sample 004"><div class="meta"><strong>004</strong><br>unconditional, t=0.8<br><code>samples_repaired/svg/004_unconditional_t0.8.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/005_unconditional_t1.png" alt="sample 005"><div class="meta"><strong>005</strong><br>unconditional, t=1.0<br><code>samples_repaired/svg/005_unconditional_t1.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/006_unconditional_t0.5.png" alt="sample 006"><div class="meta"><strong>006</strong><br>unconditional, t=0.5<br><code>samples_repaired/svg/006_unconditional_t0.5.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/007_unconditional_t0.8.png" alt="sample 007"><div class="meta"><strong>007</strong><br>unconditional, t=0.8<br><code>samples_repaired/svg/007_unconditional_t0.8.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/009_unconditional_t0.5.png" alt="sample 009"><div class="meta"><strong>009</strong><br>unconditional, t=0.5<br><code>samples_repaired/svg/009_unconditional_t0.5.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/013_unconditional_t0.8.png" alt="sample 013"><div class="meta"><strong>013</strong><br>unconditional, t=0.8<br><code>samples_repaired/svg/013_unconditional_t0.8.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/017_unconditional_t1.png" alt="sample 017"><div class="meta"><strong>017</strong><br>unconditional, t=1.0<br><code>samples_repaired/svg/017_unconditional_t1.svg</code></div></div>
+    <div class="card"><img src="samples_repaired/png/028_prefix_4_t0.8.png" alt="sample 028"><div class="meta"><strong>028</strong><br>prefix curve, t=0.8<br><code>samples_repaired/svg/028_prefix_4_t0.8.svg</code></div></div>
+  </div>
+</body>
+</html>
