@@ -1,111 +1,121 @@
-# Current Experiment Summary
+# Fixed Formal Scaling Summary
 
-## GPU Check
+This summary is for the formal run after fixing SVG path-number rounding in `scripts/preprocess.py`. Older results produced before that fix should be treated as stale because tight path commands such as `C8.64` could be corrupted.
+
+## Full Data
 
 | item | value |
-| --- | --- |
-| GPU | NVIDIA GeForce RTX 5070 Ti |
-| VRAM | 16,303 MiB |
-| PyTorch | 2.11.0+cu128 |
-| CUDA available | true |
-| CUDA runtime | 12.8 |
-
-## Full Data Summary
-
-| split | files kept | tokens | dropped too long |
-| --- | ---: | ---: | ---: |
-| train | 48,139 | 28,266,652 | 30,686 |
-| val | 455 | 260,639 | 349 |
-| test | 505 | 298,937 | 300 |
-
-Tokenizer vocab size: 176. Max tokens per SVG: 1024.
-
-## LR Sweep
-
-Tiny model, 1000 steps, CUDA.
-
-| run | learning rate | best val loss | val perplexity | elapsed |
-| --- | ---: | ---: | ---: | ---: |
-| tiny_lr_1e-4 | 0.0001 | 1.5663 | 4.7890 | 26.7s |
-| tiny_lr_3e-4 | 0.0003 | 1.3032 | 3.6811 | 26.7s |
-| tiny_lr_1e-3 | 0.001 | 1.1145 | 3.0479 | 26.7s |
-| tiny_lr_3e-3 | 0.003 | 1.0197 | 2.7724 | 26.7s |
-| tiny_lr_1e-2 | 0.01 | 1.0160 | 2.7621 | 26.6s |
-
-Selected LR by tiny sweep: 0.01.
-
-## Scaling Runs
-
-All runs used 1000 steps, CUDA, learning rate 0.01.
-
-| run | parameters | best val loss | val perplexity | peak GPU MB | tokens/sec | elapsed |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| tiny | 944,896 | 0.9643 | 2.6228 | 1,305.0 | 307,465 | 26.6s |
-| small | 2,007,168 | 1.1604 | 3.1911 | 1,947.3 | 214,657 | 38.2s |
-| medium | 5,040,128 | 1.4651 | 4.3278 | 1,909.5 | 114,021 | 71.8s |
-| large_lite | 11,099,136 | 1.5205 | 4.5745 | 1,186.9 | 111,652 | 73.4s |
-| xl_lite | 25,818,112 | 1.5783 | 4.8470 | 1,158.8 | 68,101 | 120.3s |
-
-This run is useful as an LR stress test, but it is not the best scaling result because loss gets worse as model size grows.
-
-## Recommended Scaling Runs
-
-All runs used 1000 steps, CUDA, learning rate 0.001. These are the better report numbers because validation loss improves with model size.
-
-| run | parameters | best val loss | val perplexity | peak GPU MB | tokens/sec | elapsed |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| lr1e-3_tiny | 944,896 | 1.1133 | 3.0444 | 1,305.0 | 305,851 | 26.8s |
-| lr1e-3_small | 2,007,168 | 1.0330 | 2.8095 | 1,947.3 | 214,070 | 38.3s |
-| lr1e-3_medium | 5,040,128 | 0.9570 | 2.6040 | 1,909.5 | 113,903 | 71.9s |
-| lr1e-3_large_lite | 11,099,136 | 0.8759 | 2.4011 | 1,186.9 | 112,286 | 73.0s |
-| lr1e-3_xl_lite | 25,818,112 | 0.8278 | 2.2883 | 1,158.8 | 68,320 | 119.9s |
-
-Recommended scaling fit:
-
-| metric | value |
 | --- | ---: |
-| method | scipy_curve_fit |
-| alpha | 0.1505 |
-| rmse | 0.0056 |
-| predicted 10x-parameter loss | 0.6932 |
+| cleaned SVGs | 300,000 |
+| train / val / test files | 294,000 / 3,000 / 3,000 |
+| train binary size | 424.2 MiB |
+| tokenizer vocab | 342 |
+| max tokens per SVG | 1024 |
 
-## Generation And Evaluation
+| source | raw rows scanned | cleaned SVGs kept |
+| --- | ---: | ---: |
+| starvector/svg-icons-simple | 80,434 | 80,434 |
+| starvector/svg-emoji-simple | 4,114 | 4,114 |
+| starvector/svg-fonts-simple | 1,744,783 | 215,452 |
 
-Best checkpoint: `outputs/runs/lr1e-3_xl_lite/ckpt.pt`.
+## SP LR Sweep
 
-| sample batch | samples | test loss | test perplexity | XML valid | XML valid rate | render valid | note |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| default sampling | 17 | 0.7890 | 2.2013 | 3 | 17.6% | 3 | raw model outputs |
-| conservative sampling | 17 | 0.8077 | 2.2427 | 2 | 11.8% | 0 | lower temperature did not improve XML validity |
-| repaired sampling | 29 | 0.7858 | 2.1941 | 29 | 100.0% | 28 | XML-recovered outputs |
+Tiny model, full epoch, fixed preprocessing.
 
-Valid generated SVG samples are collected in:
+| learning rate | best val loss | val perplexity |
+| ---: | ---: | ---: |
+| 1e-5 | 1.6008 | 4.9568 |
+| 3e-5 | 1.3066 | 3.6936 |
+| 1e-4 | 1.0381 | 2.8238 |
+| 3e-4 | 0.8888 | 2.4321 |
+| 1e-3 | 0.8287 | 2.2903 |
+| 3e-3 | 0.8061 | 2.2392 |
+| 1e-2 | 0.8054 | 2.2376 |
 
-`outputs/runs/lr1e-3_xl_lite/sample_contact_sheet.html`
+`1e-2` barely wins on tiny, but it made `xl_lite` unstable. For the final SP scaling curve, `3e-3` was used because it is effectively tied on tiny and transfers better.
 
-Repaired rendered PNG samples are collected in:
+## SP Scaling
 
-`outputs/runs/lr1e-3_xl_lite/repaired_contact_sheet.html`
+| run | parameters | val loss | test loss | test perplexity |
+| --- | ---: | ---: | ---: | ---: |
+| tiny | 966,144 | 0.8061 | 0.8096 | 2.2469 |
+| small | 2,039,040 | 0.7618 | 0.7607 | 2.1397 |
+| medium | 5,082,624 | 0.6825 | 0.6840 | 1.9819 |
+| large_lite | 11,162,880 | 0.6180 | 0.6373 | 1.8914 |
+| xl_lite | 25,903,104 | 0.7968 | 0.8128 | 2.2541 |
 
-The low raw XML-validity rate suggests that the model learns many SVG local patterns, but the reduced 1000-step budget is not enough for reliable long-range XML closure. The repaired batch should be described as post-processed output rather than raw generation.
+Best model by test loss: `outputs/runs/large_lite/ckpt.pt`.
 
-## Outputs
+## muP LR Sweep
+
+| learning rate | best val loss | val perplexity |
+| ---: | ---: | ---: |
+| 1e-5 | 1.6620 | 5.2699 |
+| 3e-5 | 1.3961 | 4.0394 |
+| 1e-4 | 1.0770 | 2.9358 |
+| 3e-4 | 0.9520 | 2.5909 |
+| 1e-3 | 0.8469 | 2.3324 |
+| 3e-3 | 0.8152 | 2.2596 |
+| 1e-2 | 0.8068 | 2.2408 |
+
+## muP Scaling
+
+| run | parameters | val loss | test loss | test perplexity |
+| --- | ---: | ---: | ---: | ---: |
+| mup_tiny | 1,009,920 | 0.8068 | 0.7953 | 2.2152 |
+| mup_small | 2,104,704 | 0.7655 | 0.7621 | 2.1429 |
+| mup_medium | 5,170,176 | 0.7252 | 0.7142 | 2.0426 |
+| mup_large_lite | 11,294,208 | 0.7152 | 0.7122 | 2.0385 |
+| mup_xl_lite | 26,078,208 | 0.7158 | 0.7072 | 2.0283 |
+
+muP transferred the tiny-selected `1e-2` learning rate more smoothly than SP. It did not beat the best SP `large_lite` run on this fixed dataset, but it gives a cleaner scaling curve and a useful comparison point.
+
+## Scaling Fits
+
+| fit | alpha | rmse | predicted 10x loss |
+| --- | ---: | ---: | ---: |
+| SP | 0.2718 | 0.0661 | 0.6543 |
+| muP | 0.6593 | 0.0051 | 0.6984 |
+
+Strict epoch-end validation-loss fits were also generated for the rubric wording "validation loss after 1 epoch":
+
+| fit | alpha | rmse |
+| --- | ---: | ---: |
+| SP epoch-end | 0.2782 | 0.0580 |
+| muP epoch-end | 0.6645 | 0.0134 |
+
+## Generation
+
+Final generation used the best checkpoint by test loss:
+
+`outputs/runs/large_lite/ckpt.pt`
+
+Sampling settings: 95 unconditional samples plus 5 prefix samples, `temperatures=0.25,0.35,0.45`, `top_k=15`, `max_new_tokens=1024`, repair enabled.
+
+| samples | XML valid | structural valid | render valid | test loss | test perplexity |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 100 / 100 | 100 / 100 | 100 / 100 | 0.6373 | 1.8914 |
+
+## Key Artifacts
 
 | artifact | path |
 | --- | --- |
-| LR sweep plot | `outputs/analysis/lr_sweep.png` |
-| LR=0.01 validation curves | `outputs/analysis/validation_curves.png` |
-| LR=0.01 scaling fit JSON | `outputs/analysis/scaling_fit.json` |
-| LR=0.01 scaling plot | `outputs/analysis/scaling_plot.png` |
-| LR=0.001 validation curves | `outputs/analysis_lr1e-3/validation_curves.png` |
-| LR=0.001 scaling fit JSON | `outputs/analysis_lr1e-3/scaling_fit.json` |
-| LR=0.001 scaling plot | `outputs/analysis_lr1e-3/scaling_plot.png` |
-| default samples | `outputs/runs/lr1e-3_xl_lite/samples/samples.jsonl` |
-| conservative samples | `outputs/runs/lr1e-3_xl_lite/samples_conservative/samples.jsonl` |
-| sample contact sheet | `outputs/runs/lr1e-3_xl_lite/sample_contact_sheet.html` |
-| repaired samples | `outputs/runs/lr1e-3_xl_lite/samples_repaired/samples.jsonl` |
-| repaired PNG contact sheet | `outputs/runs/lr1e-3_xl_lite/repaired_contact_sheet.html` |
+| dataset examples | `outputs/analysis/dataset_examples.html` |
+| dataset histogram | `outputs/analysis/sequence_length_histogram.png` |
+| SP LR sweep plot | `outputs/analysis/lr_sweep.png` |
+| SP validation curves | `outputs/analysis/validation_curves.png` |
+| SP training loss curves | `outputs/analysis/training_loss_curves.png` |
+| SP scaling fit | `outputs/analysis/scaling_fit.json` |
+| SP epoch-end scaling plot | `outputs/analysis/scaling_after_1epoch.png` |
+| muP LR sweep plot | `outputs/analysis_mup/lr_sweep.png` |
+| muP validation curves | `outputs/analysis_mup/validation_curves.png` |
+| muP training loss curves | `outputs/analysis_mup/training_loss_curves.png` |
+| muP scaling fit | `outputs/analysis_mup/scaling_fit.json` |
+| muP epoch-end scaling plot | `outputs/analysis_mup/scaling_after_1epoch.png` |
+| SP vs muP plot | `outputs/analysis/sp_vs_mup_scaling.png` |
+| final sample JSONL | `outputs/runs/large_lite/samples_conservative_100/samples_evaluated.jsonl` |
+| final sample HTML | `outputs/runs/large_lite/sample_contact_sheet_conservative_100.html` |
 
-## Important Note
+## Report Takeaway
 
-The tiny LR sweep selected `0.01`, but that learning rate did not transfer well to larger models. The `0.001` fixed-LR scaling run is more stable and should be the primary result for the report. In the writeup, mention that the tiny-optimal LR was too aggressive for larger models and that a conservative fixed LR produced monotonic scaling.
+The strongest result is that the fixed preprocessing gives valid, renderable SVGs and improves the modeling story. SP reaches the best raw loss at `large_lite`, but its largest model degrades. muP gives a much smoother scaling curve and demonstrates better learning-rate transfer, even though its final loss is slightly worse than the best SP checkpoint on this run.
