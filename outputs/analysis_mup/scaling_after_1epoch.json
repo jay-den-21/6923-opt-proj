@@ -1,0 +1,41 @@
+{
+  "fit": {
+    "a": 999.9999999999402,
+    "alpha": 0.6644568285212471,
+    "c": 0.7070745094732753,
+    "rmse": 0.013357806528189941,
+    "method": "scipy_curve_fit"
+  },
+  "runs": [
+    {
+      "run": "mup_tiny",
+      "parameters": 1009920,
+      "final_val_loss": 0.8117590630054474,
+      "final_step": 13573
+    },
+    {
+      "run": "mup_small",
+      "parameters": 2104704,
+      "final_val_loss": 0.77613889336586,
+      "final_step": 13573
+    },
+    {
+      "run": "mup_medium",
+      "parameters": 5170176,
+      "final_val_loss": 0.7251648473739624,
+      "final_step": 13573
+    },
+    {
+      "run": "mup_large_lite",
+      "parameters": 11294208,
+      "final_val_loss": 0.7152192151546478,
+      "final_step": 13573
+    },
+    {
+      "run": "mup_xl_lite",
+      "parameters": 26078208,
+      "final_val_loss": 0.7394036781787873,
+      "final_step": 13573
+    }
+  ]
+}
