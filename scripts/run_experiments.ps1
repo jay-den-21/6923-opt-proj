@@ -22,7 +22,8 @@ param(
   [int]$MaxSteps = 0,
   [string]$Device = "auto",
   [string[]]$Datasets = @("starvector/svg-icons-simple", "starvector/svg-emoji-simple", "starvector/svg-fonts-simple"),
-  [int]$MaxRecords = 0
+  [int]$MaxRecords = 0,
+  [string]$SampleRun = "mup_large_lite"
 )
 
 $ErrorActionPreference = "Stop"
@@ -280,22 +281,33 @@ function Run-Analysis {
 }
 
 function Make-SampleSheet {
+  $sampleDir = "outputs/runs/$SampleRun/samples"
   Invoke-Step "Build generated sample sheet" {
     Run-Python scripts/make_sample_sheet.py `
-      --samples outputs/runs/xl_lite/samples/samples_evaluated.jsonl `
-      --out outputs/runs/xl_lite/sample_contact_sheet.html
+      --samples "$sampleDir/samples_evaluated.jsonl" `
+      --out "outputs/runs/$SampleRun/sample_contact_sheet.html"
   }
 }
 
 function Run-SampleEval {
+  $runDir = "outputs/runs/$SampleRun"
+  $sampleDir = "$runDir/samples"
   Invoke-Step "Sample from best checkpoint" {
-    Run-Python scripts/sample.py --ckpt outputs/runs/xl_lite/ckpt.pt --out_dir outputs/runs/xl_lite/samples --device $Device
+    Run-Python scripts/sample.py `
+      --ckpt "$runDir/ckpt.pt" `
+      --out_dir $sampleDir `
+      --device $Device `
+      --unconditional 12 `
+      --max_new_tokens 1024 `
+      --temperatures "0.5,0.8,1.0" `
+      --top_k 50 `
+      --repair
   }
   Invoke-Step "Evaluate samples" {
     Run-Python scripts/evaluate.py `
-      --ckpt outputs/runs/xl_lite/ckpt.pt `
-      --samples outputs/runs/xl_lite/samples/samples.jsonl `
-      --out outputs/runs/xl_lite/evaluation.json `
+      --ckpt "$runDir/ckpt.pt" `
+      --samples "$sampleDir/samples.jsonl" `
+      --out "$runDir/evaluation.json" `
       --device $Device
   }
 }

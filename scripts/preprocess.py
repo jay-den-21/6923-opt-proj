@@ -7,14 +7,32 @@ import argparse
 import json
 import re
 import random
+import os
 from pathlib import Path
 from typing import Any
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 from lxml import etree
 from tqdm import tqdm
 
 from common import write_json
+
+
+def add_windows_cairo_path() -> None:
+    if os.name != "nt":
+        return
+    candidates = [
+        Path(r"C:\Program Files\GTK3-Runtime Win64\bin"),
+        Path(r"C:\Program Files (x86)\GTK3-Runtime Win64\bin"),
+    ]
+    for path in candidates:
+        if path.exists():
+            os.environ["PATH"] = f"{path}{os.pathsep}{os.environ.get('PATH', '')}"
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(path))
+
+
+add_windows_cairo_path()
 
 try:
     import cairosvg
@@ -22,8 +40,9 @@ except Exception:  # pragma: no cover
     cairosvg = None
 
 
-NUMBER_RE = re.compile(r"(?<![A-Za-z])[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
+NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 WHITESPACE_RE = re.compile(r">\s+<|\s+")
+CACHE_ROOT = Path.home() / ".cache" / "huggingface" / "datasets"
 
 
 def first_svg_field(row: dict[str, Any]) -> str | None:
@@ -52,6 +71,10 @@ def round_number(match: re.Match[str], precision: int) -> str:
     return rounded
 
 
+def round_numbers_in_text(text: str, precision: int) -> str:
+    return NUMBER_RE.sub(lambda m: round_number(m, precision), text)
+
+
 def strip_unwanted(root: etree._Element) -> None:
     remove_names = {"metadata", "title", "desc"}
     for node in list(root.iter()):
@@ -60,14 +83,22 @@ def strip_unwanted(root: etree._Element) -> None:
             node.getparent().remove(node)
 
 
+def round_numeric_attributes(root: etree._Element, precision: int) -> None:
+    for node in root.iter():
+        if not isinstance(node.tag, str):
+            continue
+        for key, value in list(node.attrib.items()):
+            node.attrib[key] = round_numbers_in_text(value, precision)
+
+
 def clean_svg(svg: str, precision: int) -> str:
     parser = etree.XMLParser(remove_comments=True, resolve_entities=False, no_network=True)
     root = etree.fromstring(svg.encode("utf-8"), parser=parser)
     if etree.QName(root).localname != "svg":
         raise ValueError("root element is not svg")
     strip_unwanted(root)
+    round_numeric_attributes(root, precision)
     compact = etree.tostring(root, encoding="unicode", method="xml", pretty_print=False)
-    compact = NUMBER_RE.sub(lambda m: round_number(m, precision), compact)
     compact = WHITESPACE_RE.sub(lambda m: "><" if m.group(0).startswith(">") else " ", compact)
     return compact.strip()
 
@@ -92,6 +123,26 @@ def split_name(index: int, n_total: int, val_frac: float, test_frac: float) -> s
     return "test"
 
 
+def cached_train_arrow_paths(source_name: str) -> list[Path]:
+    cache_dir = CACHE_ROOT / source_name.replace("/", "___")
+    if not cache_dir.exists():
+        raise FileNotFoundError(f"Missing local cache for {source_name}: {cache_dir}")
+    paths = sorted(cache_dir.rglob("*-train*.arrow"))
+    paths = [path for path in paths if not path.name.startswith("cache-")]
+    if not paths:
+        raise FileNotFoundError(f"No train Arrow files found for {source_name} under {cache_dir}")
+    return paths
+
+
+def source_datasets(source_name: str, use_cached_starvector: bool) -> list[tuple[str, Dataset]]:
+    if not use_cached_starvector:
+        return [(source_name, load_dataset(source_name, split="train"))]
+    return [
+        (str(path), Dataset.from_file(str(path)))
+        for path in cached_train_arrow_paths(source_name)
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default=None, help="Single HuggingFace dataset, kept for backward compatibility.")
@@ -112,6 +163,11 @@ def main() -> None:
     parser.add_argument("--limit_per_dataset", type=int, default=None)
     parser.add_argument("--max_records", type=int, default=None, help="Stop after this many cleaned SVGs across all datasets.")
     parser.add_argument("--render_validate", action="store_true", help="Drop SVGs that CairoSVG cannot render.")
+    parser.add_argument(
+        "--use_cached_starvector",
+        action="store_true",
+        help="Read StarVector train Arrow files directly from the local HuggingFace cache.",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -140,43 +196,61 @@ def main() -> None:
     }
 
     for source_index, source_name in enumerate(source_names):
-        dataset = load_dataset(source_name, split="train")
+        datasets = source_datasets(source_name, args.use_cached_starvector)
         row_limit = args.limit_per_dataset or args.limit
-        if row_limit:
-            dataset = dataset.select(range(min(row_limit, len(dataset))))
-        dataset = dataset.shuffle(seed=args.seed + source_index)
+        total_rows = sum(len(dataset) for _, dataset in datasets)
+        limited_rows = min(row_limit, total_rows) if row_limit else total_rows
         source_stats = {
-            "raw_rows": len(dataset),
+            "raw_rows": limited_rows,
             "kept": 0,
             "dropped_no_svg": 0,
             "dropped_parse": 0,
             "dropped_length": 0,
             "dropped_render": 0,
+            "arrow_files": [label for label, _ in datasets] if args.use_cached_starvector else [],
         }
-        stats["raw_rows"] += len(dataset)
+        stats["raw_rows"] += limited_rows
 
-        for row in tqdm(dataset, desc=f"cleaning {source_name}"):
-            raw_svg = first_svg_field(row)
-            if raw_svg is None:
-                stats["dropped_no_svg"] += 1
-                source_stats["dropped_no_svg"] += 1
-                continue
-            try:
-                svg = clean_svg(raw_svg, args.precision)
-            except Exception:
-                stats["dropped_parse"] += 1
-                source_stats["dropped_parse"] += 1
-                continue
-            if len(svg) < args.min_chars or len(svg) > args.max_chars:
-                stats["dropped_length"] += 1
-                source_stats["dropped_length"] += 1
-                continue
-            if args.render_validate and not render_ok(svg):
-                stats["dropped_render"] += 1
-                source_stats["dropped_render"] += 1
-                continue
-            records.append({"id": len(records), "svg": svg, "source": source_name})
-            source_stats["kept"] += 1
+        seen_rows = 0
+        for shard_index, (dataset_label, dataset) in enumerate(datasets):
+            remaining_limit = None if row_limit is None else row_limit - seen_rows
+            if remaining_limit is not None and remaining_limit <= 0:
+                break
+
+            indices = list(range(len(dataset)))
+            random.Random(args.seed + source_index * 1009 + shard_index).shuffle(indices)
+            if remaining_limit is not None:
+                indices = indices[:remaining_limit]
+            seen_rows += len(indices)
+
+            desc = f"cleaning {source_name}"
+            if len(datasets) > 1:
+                desc = f"{desc} shard {shard_index + 1}/{len(datasets)}"
+            for row_index in tqdm(indices, desc=desc):
+                row = dataset[int(row_index)]
+                raw_svg = first_svg_field(row)
+                if raw_svg is None:
+                    stats["dropped_no_svg"] += 1
+                    source_stats["dropped_no_svg"] += 1
+                    continue
+                try:
+                    svg = clean_svg(raw_svg, args.precision)
+                except Exception:
+                    stats["dropped_parse"] += 1
+                    source_stats["dropped_parse"] += 1
+                    continue
+                if len(svg) < args.min_chars or len(svg) > args.max_chars:
+                    stats["dropped_length"] += 1
+                    source_stats["dropped_length"] += 1
+                    continue
+                if args.render_validate and not render_ok(svg):
+                    stats["dropped_render"] += 1
+                    source_stats["dropped_render"] += 1
+                    continue
+                records.append({"id": len(records), "svg": svg, "source": source_name})
+                source_stats["kept"] += 1
+                if args.max_records and len(records) >= args.max_records:
+                    break
             if args.max_records and len(records) >= args.max_records:
                 break
         stats["sources"][source_name] = source_stats

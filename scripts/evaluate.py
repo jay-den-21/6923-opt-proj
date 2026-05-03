@@ -39,7 +39,7 @@ except Exception:  # pragma: no cover
 
 from common import SvgTokenizer, TrainConfig, memmap_split, pick_device, safe_torch_load, write_json
 from model import GPT
-from train import estimate_loss
+from train import configure_mup, estimate_loss
 
 
 NUMERIC_ATTRS = {
@@ -102,7 +102,9 @@ def render_valid(svg: str) -> bool:
 def load_model(ckpt_path: Path, device: torch.device):
     ckpt = safe_torch_load(ckpt_path, map_location=device)
     cfg = TrainConfig.from_dict(ckpt["config"])
-    model = GPT(cfg, ckpt["vocab_size"]).to(device)
+    model = GPT(cfg, ckpt["vocab_size"])
+    configure_mup(model, cfg, ckpt["vocab_size"])
+    model = model.to(device)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
     return model, cfg, ckpt
