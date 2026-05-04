@@ -111,6 +111,9 @@ class TrainConfig:
     log_interval: int = 20
     seed: int = 1337
     compile: bool = False
+    parameterization: str = "sp"
+    mup_base_width: int = 128
+    mup_delta_width: int = 256
     notes: dict[str, Any] = field(default_factory=dict)
 
     @classmethod

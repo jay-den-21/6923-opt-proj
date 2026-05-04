@@ -5,9 +5,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import torch
+from lxml import etree
+
+
+def add_windows_cairo_path() -> None:
+    if os.name != "nt":
+        return
+    candidates = [
+        Path(r"C:\Program Files\GTK3-Runtime Win64\bin"),
+        Path(r"C:\Program Files (x86)\GTK3-Runtime Win64\bin"),
+    ]
+    for path in candidates:
+        if path.exists():
+            os.environ["PATH"] = f"{path}{os.pathsep}{os.environ.get('PATH', '')}"
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(path))
+
+
+add_windows_cairo_path()
 
 try:
     import cairosvg
@@ -46,6 +65,22 @@ def maybe_close_svg(text: str) -> str:
     return text.strip()
 
 
+def repair_svg(text: str) -> str:
+    text = maybe_close_svg(text)
+    parser = etree.XMLParser(recover=True, remove_comments=True, resolve_entities=False, no_network=True)
+    try:
+        root = etree.fromstring(text.encode("utf-8"), parser=parser)
+    except Exception:
+        if "<svg" in text and "</svg>" not in text:
+            text = text + "</svg>"
+            root = etree.fromstring(text.encode("utf-8"), parser=parser)
+        else:
+            raise
+    if etree.QName(root).localname != "svg":
+        raise ValueError("recovered root element is not svg")
+    return etree.tostring(root, encoding="unicode", method="xml", pretty_print=False).strip()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True)
@@ -57,6 +92,7 @@ def main() -> None:
     parser.add_argument("--temperatures", default="0.5,0.8,1.0")
     parser.add_argument("--top_k", type=int, default=50)
     parser.add_argument("--top_p", type=float, default=None)
+    parser.add_argument("--repair", action="store_true", help="Attempt lxml recovery before writing/evaluating samples.")
     args = parser.parse_args()
 
     device = pick_device(args.device)
@@ -90,7 +126,16 @@ def main() -> None:
                 top_p=args.top_p,
                 eos_id=tokenizer.eos_id,
             )
-        svg = maybe_close_svg(tokenizer.decode(out[0], skip_special=True))
+        raw_svg = maybe_close_svg(tokenizer.decode(out[0], skip_special=True))
+        repaired = False
+        svg = raw_svg
+        if args.repair:
+            try:
+                repaired_svg = repair_svg(raw_svg)
+                repaired = repaired_svg != raw_svg
+                svg = repaired_svg
+            except Exception:
+                pass
         stem = f"{i:03d}_{kind}_t{temperature:g}"
         svg_path = svg_dir / f"{stem}.svg"
         png_path = png_dir / f"{stem}.png"
@@ -104,6 +149,8 @@ def main() -> None:
                 "temperature": temperature,
                 "top_k": args.top_k,
                 "top_p": args.top_p,
+                "repaired": repaired,
+                "raw_svg": raw_svg if args.repair else None,
                 "svg": svg,
                 "svg_path": str(svg_path),
                 "png_path": str(png_path) if rendered else None,

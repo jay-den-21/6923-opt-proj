@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SVG Generation Samples</title>
+  <style>
+    body {
+      margin: 32px;
+      font-family: Arial, sans-serif;
+      color: #1f2933;
+      background: #f6f8fa;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 24px;
+      max-width: 900px;
+      line-height: 1.45;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      max-width: 1200px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    object {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid #d8dee4;
+      background: white;
+    }
+    .meta {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    code {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>SVG Generation Samples</h1>
+  <p>
+    XML-valid samples generated from the lr=1e-3 xl_lite checkpoint.
+    Browser rendering is used here because CairoSVG cannot find the native Cairo library on this Windows machine.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <object data="samples/svg/002_unconditional_t1.svg" type="image/svg+xml"></object>
+      <div class="meta">
+        <strong>Sample 002</strong><br>
+        kind: unconditional, temperature: 1.0<br>
+        <code>samples/svg/002_unconditional_t1.svg</code>
+      </div>
+    </div>
+    <div class="card">
+      <object data="samples/svg/013_prefix_1_t0.8.svg" type="image/svg+xml"></object>
+      <div class="meta">
+        <strong>Sample 013</strong><br>
+        kind: prefix path, temperature: 0.8<br>
+        <code>samples/svg/013_prefix_1_t0.8.svg</code>
+      </div>
+    </div>
+    <div class="card">
+      <object data="samples/svg/016_prefix_4_t0.8.svg" type="image/svg+xml"></object>
+      <div class="meta">
+        <strong>Sample 016</strong><br>
+        kind: prefix curve, temperature: 0.8<br>
+        <code>samples/svg/016_prefix_4_t0.8.svg</code>
+      </div>
+    </div>
+    <div class="card">
+      <object data="samples_conservative/svg/001_unconditional_t0.3.svg" type="image/svg+xml"></object>
+      <div class="meta">
+        <strong>Conservative 001</strong><br>
+        kind: unconditional, temperature: 0.3<br>
+        <code>samples_conservative/svg/001_unconditional_t0.3.svg</code>
+      </div>
+    </div>
+    <div class="card">
+      <object data="samples_conservative/svg/007_unconditional_t0.3.svg" type="image/svg+xml"></object>
+      <div class="meta">
+        <strong>Conservative 007</strong><br>
+        kind: unconditional, temperature: 0.3<br>
+        <code>samples_conservative/svg/007_unconditional_t0.3.svg</code>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

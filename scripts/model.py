@@ -12,6 +12,11 @@ import torch.nn.functional as F
 
 from common import TrainConfig
 
+try:
+    from mup import MuReadout
+except Exception:  # pragma: no cover
+    MuReadout = None
+
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, cfg: TrainConfig):
@@ -20,6 +25,7 @@ class CausalSelfAttention(nn.Module):
             raise ValueError("d_model must be divisible by n_heads")
         self.n_heads = cfg.n_heads
         self.head_dim = cfg.d_model // cfg.n_heads
+        self.parameterization = cfg.parameterization
         self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
         self.proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
         self.attn_dropout = nn.Dropout(cfg.dropout)
@@ -33,7 +39,8 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch, seq_len, self.n_heads, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_heads, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_heads, self.head_dim).transpose(1, 2)
-        att = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        scale = self.head_dim if self.parameterization == "mup" else math.sqrt(self.head_dim)
+        att = (q @ k.transpose(-2, -1)) / scale
         att = att.masked_fill(self.mask[:, :, :seq_len, :seq_len] == 0, float("-inf"))
         att = F.softmax(att, dim=-1)
         att = self.attn_dropout(att)
@@ -80,8 +87,13 @@ class GPT(nn.Module):
         self.drop = nn.Dropout(cfg.dropout)
         self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layers)])
         self.ln_f = nn.LayerNorm(cfg.d_model)
-        self.lm_head = nn.Linear(cfg.d_model, vocab_size, bias=False)
-        self.lm_head.weight = self.token_embedding.weight
+        if cfg.parameterization == "mup":
+            if MuReadout is None:
+                raise ImportError("parameterization='mup' requires the mup package. Install it with `pip install mup`.")
+            self.lm_head = MuReadout(cfg.d_model, vocab_size, bias=False)
+        else:
+            self.lm_head = nn.Linear(cfg.d_model, vocab_size, bias=False)
+            self.lm_head.weight = self.token_embedding.weight
         self.apply(self._init_weights)
 
     def _init_weights(self, module: nn.Module) -> None:

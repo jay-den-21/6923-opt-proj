@@ -1,0 +1,46 @@
+{
+  "checkpoint": "outputs\\runs\\large_lite\\ckpt.pt",
+  "config": {
+    "batch_size": 2,
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "block_size": 1024,
+    "compile": false,
+    "d_ff": 1536,
+    "d_model": 384,
+    "dropout": 0.1,
+    "eval_interval": 200,
+    "eval_iters": 50,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 0.003,
+    "log_interval": 20,
+    "max_steps": null,
+    "min_lr": 3e-05,
+    "mup_base_width": 128,
+    "mup_delta_width": 256,
+    "n_heads": 8,
+    "n_layers": 6,
+    "name": "large_lite",
+    "notes": {
+      "role": "larger local-GPU point"
+    },
+    "parameterization": "sp",
+    "seed": 1337,
+    "warmup_steps": 100,
+    "weight_decay": 0.1
+  },
+  "parameters": 11162880,
+  "samples": {
+    "annotated_samples": "outputs\\runs\\large_lite\\samples_conservative_100\\samples_evaluated.jsonl",
+    "cairosvg_available": true,
+    "render_valid": 100,
+    "render_valid_rate": 1.0,
+    "samples": 100,
+    "structural_valid": 100,
+    "structural_valid_rate": 1.0,
+    "xml_valid": 100,
+    "xml_valid_rate": 1.0
+  },
+  "test_loss": 0.6373255741596222,
+  "test_perplexity": 1.8914156581338546
+}

@@ -1,6 +1,9 @@
 .venv/
+.vscode/
 __pycache__/
 *.py[cod]
 data/
 outputs/
+report/
+CODEX.md
 .DS_Store

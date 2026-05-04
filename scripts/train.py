@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import math
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +27,12 @@ from common import (
     write_json,
 )
 from model import GPT
+
+try:
+    from mup import MuAdamW, set_base_shapes
+except Exception:  # pragma: no cover
+    MuAdamW = None
+    set_base_shapes = None
 
 
 def get_batch(data: np.memmap, batch_size: int, block_size: int, device: torch.device):
@@ -56,6 +62,26 @@ def gpu_memory_mb(device: torch.device) -> float:
     return 0.0
 
 
+def width_for_heads(width: int, n_heads: int) -> int:
+    return max(n_heads, int(math.ceil(width / n_heads)) * n_heads)
+
+
+def mup_shape_config(cfg, width: int):
+    d_model = width_for_heads(width, cfg.n_heads)
+    d_ff = max(cfg.n_heads, int(round(cfg.d_ff * d_model / cfg.d_model)))
+    return replace(cfg, d_model=d_model, d_ff=d_ff, parameterization="mup", compile=False)
+
+
+def configure_mup(model: GPT, cfg, vocab_size: int) -> None:
+    if cfg.parameterization != "mup":
+        return
+    if set_base_shapes is None or MuAdamW is None:
+        raise ImportError("parameterization='mup' requires the mup package. Install it with `pip install mup`.")
+    base = GPT(mup_shape_config(cfg, cfg.mup_base_width), vocab_size)
+    delta = GPT(mup_shape_config(cfg, cfg.mup_delta_width), vocab_size)
+    set_base_shapes(model, base, delta=delta)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -65,6 +91,9 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--learning_rate", type=float, default=None, help="Override config LR for sweeps.")
     parser.add_argument("--max_steps", type=int, default=None, help="Override config or one-epoch step count.")
+    parser.add_argument("--parameterization", choices=["sp", "mup"], default=None, help="Override config parameterization.")
+    parser.add_argument("--mup_base_width", type=int, default=None)
+    parser.add_argument("--mup_delta_width", type=int, default=None)
     args = parser.parse_args()
 
     cfg = load_train_config(args.config)
@@ -73,6 +102,12 @@ def main() -> None:
         cfg.min_lr = min(cfg.min_lr, args.learning_rate / 10.0)
     if args.max_steps is not None:
         cfg.max_steps = args.max_steps
+    if args.parameterization is not None:
+        cfg.parameterization = args.parameterization
+    if args.mup_base_width is not None:
+        cfg.mup_base_width = args.mup_base_width
+    if args.mup_delta_width is not None:
+        cfg.mup_delta_width = args.mup_delta_width
 
     out_dir = Path(args.out_dir or f"outputs/runs/{cfg.name}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -84,11 +119,14 @@ def main() -> None:
     inferred_epoch_steps = max(1, len(train_data) // cfg.tokens_per_optimizer_step)
     total_steps = cfg.max_steps or inferred_epoch_steps
 
-    model = GPT(cfg, tokenizer.vocab_size).to(device)
+    model = GPT(cfg, tokenizer.vocab_size)
+    configure_mup(model, cfg, tokenizer.vocab_size)
+    model = model.to(device)
     if cfg.compile and hasattr(torch, "compile"):
         model = torch.compile(model)
     raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
-    optimizer = torch.optim.AdamW(
+    optimizer_cls = MuAdamW if cfg.parameterization == "mup" else torch.optim.AdamW
+    optimizer = optimizer_cls(
         raw_model.parameters(),
         lr=cfg.learning_rate,
         betas=(cfg.beta1, cfg.beta2),

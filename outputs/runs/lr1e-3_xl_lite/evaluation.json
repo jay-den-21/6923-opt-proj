@@ -1,0 +1,41 @@
+{
+  "checkpoint": "outputs/runs/lr1e-3_xl_lite/ckpt.pt",
+  "config": {
+    "batch_size": 1,
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "block_size": 1024,
+    "compile": false,
+    "d_ff": 2048,
+    "d_model": 512,
+    "dropout": 0.1,
+    "eval_interval": 200,
+    "eval_iters": 50,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 0.001,
+    "log_interval": 20,
+    "max_steps": 1000,
+    "min_lr": 3e-05,
+    "n_heads": 8,
+    "n_layers": 8,
+    "name": "xl_lite",
+    "notes": {
+      "role": "largest feasible local-GPU point"
+    },
+    "seed": 1337,
+    "warmup_steps": 100,
+    "weight_decay": 0.1
+  },
+  "parameters": 25818112,
+  "samples": {
+    "annotated_samples": "outputs\\runs\\lr1e-3_xl_lite\\samples\\samples_evaluated.jsonl",
+    "cairosvg_available": false,
+    "render_valid": 0,
+    "render_valid_rate": 0.0,
+    "samples": 17,
+    "xml_valid": 3,
+    "xml_valid_rate": 0.17647058823529413
+  },
+  "test_loss": 0.8220327603816986,
+  "test_perplexity": 2.275119913811915
+}

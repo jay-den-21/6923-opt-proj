@@ -1,0 +1,67 @@
+{
+  "a": 7.130441054253255,
+  "alpha": 0.2717704263100798,
+  "c": 0.6173860926496982,
+  "method": "scipy_curve_fit",
+  "prediction": {
+    "interval": {
+      "method": "residual_bootstrap",
+      "prediction_p05": 0.5268821493332337,
+      "prediction_p50": 0.6444985151305668,
+      "prediction_p95": 0.7510929247434818,
+      "samples_requested": 1000,
+      "samples_used": 1000
+    },
+    "loss": 0.6542512579961746,
+    "multiplier": 10.0,
+    "parameters": 259031040.0
+  },
+  "rmse": 0.06609330947319872,
+  "runs": [
+    {
+      "elapsed_seconds": 383.0744559764862,
+      "gpu_memory_mb": 1307.17578125,
+      "name": "tiny",
+      "parameters": 966144,
+      "tokens_per_second": 290256.9311664703,
+      "val_loss": 0.806139018535614
+    },
+    {
+      "elapsed_seconds": 550.1012425422668,
+      "gpu_memory_mb": 1950.15869140625,
+      "name": "small",
+      "parameters": 2039040,
+      "tokens_per_second": 202126.45855177604,
+      "val_loss": 0.7618206357955932
+    },
+    {
+      "elapsed_seconds": 1011.1455538272858,
+      "gpu_memory_mb": 1911.11767578125,
+      "name": "medium",
+      "parameters": 5082624,
+      "tokens_per_second": 109964.40184020472,
+      "val_loss": 0.6825129473209381
+    },
+    {
+      "elapsed_seconds": 1409.7422835826874,
+      "gpu_memory_mb": 1189.10107421875,
+      "name": "large_lite",
+      "parameters": 11162880,
+      "tokens_per_second": 78872.58351748108,
+      "val_loss": 0.6180040967464447
+    },
+    {
+      "elapsed_seconds": 2441.938890695572,
+      "gpu_memory_mb": 1160.72900390625,
+      "name": "xl_lite",
+      "parameters": 25903104,
+      "tokens_per_second": 45533.49652755978,
+      "val_loss": 0.7967846846580505
+    }
+  ],
+  "stderr": [
+    234.68745295158783,
+    2.865891512406172,
+    1.1747141946380701
+  ]
+}

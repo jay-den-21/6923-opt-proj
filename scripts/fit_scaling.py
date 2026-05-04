@@ -7,6 +7,9 @@ import argparse
 import json
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,19 +25,23 @@ def power_law(n: np.ndarray, a: float, alpha: float, c: float) -> np.ndarray:
 
 def fit_power_law(params: np.ndarray, losses: np.ndarray) -> dict:
     if curve_fit is not None and len(params) >= 4:
-        p0 = [float((losses[0] - losses[-1]) * params[0] ** 0.1), 0.1, float(losses.min() * 0.95)]
-        bounds = ([0.0, 0.0, 0.0], [1000.0, 5.0, float(losses.min() * 0.999)])
-        popt, pcov = curve_fit(power_law, params, losses, p0=p0, bounds=bounds, maxfev=10000)
-        pred = power_law(params, *popt)
-        stderr = np.sqrt(np.diag(pcov)).tolist()
-        return {
-            "method": "scipy_curve_fit",
-            "a": float(popt[0]),
-            "alpha": float(popt[1]),
-            "c": float(popt[2]),
-            "stderr": stderr,
-            "rmse": float(np.sqrt(np.mean((pred - losses) ** 2))),
-        }
+        try:
+            a0 = max(float(abs(losses[0] - losses[-1]) * params[0] ** 0.1), 1e-6)
+            p0 = [a0, 0.1, float(losses.min() * 0.95)]
+            bounds = ([0.0, 0.0, 0.0], [1000.0, 5.0, float(losses.min() * 0.999)])
+            popt, pcov = curve_fit(power_law, params, losses, p0=p0, bounds=bounds, maxfev=10000)
+            pred = power_law(params, *popt)
+            stderr = np.sqrt(np.diag(pcov)).tolist()
+            return {
+                "method": "scipy_curve_fit",
+                "a": float(popt[0]),
+                "alpha": float(popt[1]),
+                "c": float(popt[2]),
+                "stderr": stderr,
+                "rmse": float(np.sqrt(np.mean((pred - losses) ** 2))),
+            }
+        except Exception as exc:
+            scipy_error = repr(exc)
 
     best = None
     for c in np.linspace(0.0, float(losses.min() * 0.95), 200):
@@ -50,6 +57,8 @@ def fit_power_law(params: np.ndarray, losses: np.ndarray) -> dict:
             best = {"method": "grid_log_linear", "a": float(a), "alpha": float(alpha), "c": float(c), "rmse": rmse}
     if best is None:
         raise RuntimeError("Could not fit scaling law")
+    if "scipy_error" in locals():
+        best["scipy_error"] = scipy_error
     return best
 
 
@@ -58,11 +67,46 @@ def read_summary(path: Path) -> dict:
         return json.load(f)
 
 
+def prediction_interval(
+    params: np.ndarray,
+    losses: np.ndarray,
+    fit: dict,
+    predicted_n: float,
+    samples: int,
+    seed: int = 1337,
+) -> dict:
+    if samples <= 0 or len(params) < 4:
+        return {}
+    rng = np.random.default_rng(seed)
+    observed_pred = power_law(params, fit["a"], fit["alpha"], fit["c"])
+    residuals = losses - observed_pred
+    preds = []
+    for _ in range(samples):
+        boot_losses = observed_pred + rng.choice(residuals, size=len(residuals), replace=True)
+        try:
+            boot_fit = fit_power_law(params, boot_losses)
+            preds.append(float(power_law(np.asarray([predicted_n]), boot_fit["a"], boot_fit["alpha"], boot_fit["c"])[0]))
+        except Exception:
+            continue
+    if not preds:
+        return {}
+    arr = np.asarray(preds)
+    return {
+        "method": "residual_bootstrap",
+        "samples_requested": samples,
+        "samples_used": int(len(arr)),
+        "prediction_p05": float(np.percentile(arr, 5)),
+        "prediction_p50": float(np.percentile(arr, 50)),
+        "prediction_p95": float(np.percentile(arr, 95)),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", nargs="+", required=True, help="Run dirs or summary.json files.")
     parser.add_argument("--out_dir", default="outputs/analysis")
     parser.add_argument("--predict_multiplier", type=float, default=10.0)
+    parser.add_argument("--bootstrap_samples", type=int, default=1000)
     args = parser.parse_args()
 
     rows = []
@@ -87,7 +131,12 @@ def main() -> None:
     largest = float(params.max())
     predicted_n = largest * args.predict_multiplier
     predicted_loss = float(power_law(np.asarray([predicted_n]), fit["a"], fit["alpha"], fit["c"])[0])
-    fit["prediction"] = {"parameters": predicted_n, "loss": predicted_loss, "multiplier": args.predict_multiplier}
+    fit["prediction"] = {
+        "parameters": predicted_n,
+        "loss": predicted_loss,
+        "multiplier": args.predict_multiplier,
+        "interval": prediction_interval(params, losses, fit, predicted_n, args.bootstrap_samples),
+    }
     fit["runs"] = rows
 
     out_dir = Path(args.out_dir)
